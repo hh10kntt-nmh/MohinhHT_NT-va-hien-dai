@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô phỏng các mô hình nguyên tử</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; }
+        canvas { background: radial-gradient(circle, #ffffff 0%, #e5e7eb 100%); border-radius: 1rem; box-shadow: inner 0 0 20px rgba(0,0,0,0.1); }
+        .tab-btn { transition: all 0.3s ease; }
+        .tab-active { background-color: #0f766e; color: white; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .tab-inactive { background-color: white; color: #374151; border: 1px solid #d1d5db; }
+        .tab-inactive:hover { background-color: #f9fafb; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-4">
+
+    <header class="text-center mb-8 max-w-2xl">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-3">Sự phát triển của mô hình nguyên tử</h1>
+        <p class="text-gray-600">Giáo viên thiết kế: Nguyễn Mạnh Hưng- trường THPT Trại Cau</p>
+        <p class="text-gray-600">So sánh trực quan giữa mô hình cổ điển và hiện đại dựa trên hình 3.1 và 3.2</p>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="flex flex-col sm:flex-row gap-4 mb-6 w-full max-w-4xl">
+        <button onclick="setMode('planetary')" id="btn-planetary" class="tab-btn tab-active flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2">
+            <span>🪐</span> Hình 3.1: Mô hình hành tinh nguyên tử
+        </button>
+        <button onclick="setMode('cloud')" id="btn-cloud" class="tab-btn tab-inactive flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2">
+            <span>☁️</span> Hình 3.2: Mô hình đám mây
+        </button>
+    </div>
+
+    <!-- Simulation Container -->
+    <div class="bg-white p-2 rounded-2xl shadow-xl border border-gray-200 w-full max-w-4xl relative">
+        <canvas id="atomCanvas" width="800" height="500" class="w-full h-auto cursor-pointer"></canvas>
+        
+        <!-- Info Overlay -->
+        <div id="info-overlay" class="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-sm p-4 rounded-lg border border-gray-200 shadow-sm transition-opacity duration-300">
+            <h3 id="info-title" class="font-bold text-teal-800 text-lg mb-1">Mô hình Rutherford - Bohr</h3>
+            <p id="info-desc" class="text-gray-700 text-sm">Electron chuyển động quanh hạt nhân theo những quỹ đạo tròn hoặc bầu dục xác định như các hành tinh quay quanh Mặt Trời.</p>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+            <h3 class="font-bold text-gray-800 mb-3">Thông số điều khiển</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="flex justify-between text-sm font-medium text-gray-600 mb-1">
+                        Tốc độ chuyển động <span id="speed-val">1x</span>
+                    </label>
+                    <input type="range" id="speedRange" min="0" max="5" step="0.1" value="1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-600">
+                </div>
+                <div id="cloud-controls" class="hidden">
+                    <label class="flex justify-between text-sm font-medium text-gray-600 mb-1">
+                        Mật độ electron
+                    </label>
+                    <input type="range" id="densityRange" min="1000" max="5000" step="100" value="2500" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-600">
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-teal-50 p-5 rounded-xl border border-teal-100 text-sm text-teal-900">
+            <h3 class="font-bold mb-2">💡 Kiến thức cốt lõi:</h3>
+            <ul class="list-disc pl-5 space-y-2" id="knowledge-list">
+                <li>Trong mô hình này, electron được coi là hạt chuyển động trên quỹ đạo xác định.</li>
+                <li>Hạt nhân mang điện dương nằm ở tâm.</li>
+                <li>Đây là bước tiến quan trọng nhưng chưa giải thích được tính bền vững của nguyên tử.</li>
+            </ul>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('atomCanvas');
+    const ctx = canvas.getContext('2d');
+    let width, height;
+    let mode = 'planetary'; // 'planetary' or 'cloud'
+    let animationId;
+    let time = 0;
+    
+    // Configuration
+    let speed = 1;
+    let cloudDensity = 2500;
+
+    // --- STATE MANAGEMENT ---
+    const modes = {
+        planetary: {
+            title: "Hình 3.1: Mô hình Hành tinh nguyên tử",
+            desc: "Theo E. Rutherford, N. Bohr và A. Sommerfeld: Electron là các hạt chuyển động trên các quỹ đạo (elip/tròn) xác định xung quanh hạt nhân.",
+            facts: [
+                "Electron chuyển động trên quỹ đạo xác định (giống hành tinh).",
+                "Hạt nhân nằm tại tiêu điểm của quỹ đạo.",
+                "Mô hình trực quan, dễ hình dung nhưng không chính xác về mặt lượng tử."
+            ]
+        },
+        cloud: {
+            title: "Hình 3.2: Mô hình Đám mây Electron",
+            desc: "Mô hình hiện đại (Cơ học lượng tử): Không thể biết chính xác quỹ đạo của electron. Ta chỉ biết xác suất tìm thấy electron tại một vùng không gian (đám mây).",
+            facts: [
+                "Electron chuyển động rất nhanh, không theo quỹ đạo vạch sẵn.",
+                "Mật độ chấm đen dày đặc gần hạt nhân thể hiện xác suất tìm thấy electron lớn.",
+                "Càng xa hạt nhân, mật độ càng thưa (xác suất thấp)."
+            ]
+        }
+    };
+
+    function resize() {
+        // Handle High DPI displays
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        width = rect.width;
+        height = rect.height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- PLANETARY MODEL OBJECTS ---
+    const orbits = [
+        { a: 100, b: 40, angle: Math.PI / 6, speed: 2, color: '#3b82f6' }, // Blue
+        { a: 100, b: 40, angle: -Math.PI / 6, speed: 2.5, color: '#3b82f6' },
+        { a: 140, b: 60, angle: Math.PI / 2.5, speed: 1.5, color: '#3b82f6' },
+        { a: 140, b: 60, angle: -Math.PI / 3, speed: 1.8, color: '#3b82f6' }
+    ];
+
+    // --- CLOUD MODEL GENERATION ---
+    let cloudPoints = [];
+    
+    function generateCloud() {
+        cloudPoints = [];
+        // Generate points using Box-Muller transform for Gaussian distribution
+        // Simulating 1s orbital (spherical symmetry)
+        for(let i = 0; i < cloudDensity; i++) {
+            // Random radius with exponential decay probability (more points near center)
+            // Using a simple inverse transform sampling for approximation
+            const u = Math.random();
+            const r = -Math.log(u) * 60; // Scale factor
+            const theta = Math.random() * 2 * Math.PI;
+            
+            cloudPoints.push({
+                r: r,
+                theta: theta,
+                size: Math.random() * 1.5 + 0.5,
+                opacity: Math.random() * 0.5 + 0.2
+            });
+        }
+    }
+
+    // --- DRAWING FUNCTIONS ---
+
+    function drawNucleus(x, y, scale = 1) {
+        // Glow
+        const gradient = ctx.createRadialGradient(x, y, 2*scale, x, y, 15*scale);
+        gradient.addColorStop(0, 'rgba(239, 68, 68, 1)'); // Red center
+        gradient.addColorStop(0.4, 'rgba(239, 68, 68, 0.8)');
+        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, 15*scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = '#b91c1c';
+        ctx.beginPath();
+        ctx.arc(x, y, 6*scale, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Label text (only if scale is normal)
+        if(scale > 0.8) {
+            ctx.fillStyle = '#7f1d1d';
+            ctx.font = '12px Arial';
+            ctx.fillText('Hạt nhân', x - 25, y + 25);
+        }
+    }
+
+    function drawPlanetary() {
+        const cx = width / 2;
+        const cy = height / 2;
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw Nucleus
+        drawNucleus(cx, cy);
+
+        // Draw Orbits and Electrons
+        orbits.forEach((orbit, index) => {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(orbit.angle);
+
+            // Draw Orbit Path
+            ctx.beginPath();
+            ctx.ellipse(0, 0, orbit.a, orbit.b, 0, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.3)'; // Faint blue line
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Calculate Electron Position
+            const theta = time * orbit.speed + index * 10; // Offset start pos
+            const ex = orbit.a * Math.cos(theta);
+            const ey = orbit.b * Math.sin(theta);
+
+            // Draw Electron
+            ctx.beginPath();
+            ctx.arc(ex, ey, 6, 0, 2 * Math.PI);
+            // Gradient for 3D sphere look
+            const grad = ctx.createRadialGradient(ex - 2, ey - 2, 1, ex, ey, 6);
+            grad.addColorStop(0, '#93c5fd');
+            grad.addColorStop(1, '#1d4ed8');
+            ctx.fillStyle = grad;
+            ctx.fill();
+            
+            // Draw label for one electron
+            if(index === 0) {
+                 ctx.rotate(-orbit.angle); // Reset rotation for text
+                 ctx.fillStyle = '#1e3a8a';
+                 ctx.font = '12px Arial';
+                 // Position text relative to electron (requires coordinate transform back)
+                 // Simplifying: just draw it near top left
+            }
+
+            ctx.restore();
+        });
+        
+        // Static Labels similar to image
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'italic 14px Serif';
+        ctx.fillText('Electron', cx - 140, cy - 80);
+        ctx.beginPath(); ctx.moveTo(cx - 110, cy - 75); ctx.lineTo(cx - 50, cy - 50); ctx.stroke();
+
+        ctx.fillText('Quỹ đạo', cx - 140, cy + 80);
+        ctx.fillText('electron', cx - 140, cy + 95);
+        ctx.beginPath(); ctx.moveTo(cx - 100, cy + 70); ctx.lineTo(cx - 60, cy + 40); ctx.stroke();
+    }
+
+    function drawCloud() {
+        const cx = width / 2;
+        const cy = height / 2;
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Draw Points
+        ctx.fillStyle = '#1f2937'; // Dark gray dots
+        
+        cloudPoints.forEach(p => {
+            // Convert polar to cartesian
+            // Add jitter for "movement" effect
+            const jitter = (Math.random() - 0.5) * 2 * speed; 
+            const px = cx + (p.r + jitter) * Math.cos(p.theta + time * 0.1); // Slow rotation
+            const py = cy + (p.r + jitter) * Math.sin(p.theta + time * 0.1);
+
+            ctx.globalAlpha = p.opacity;
+            ctx.beginPath();
+            ctx.arc(px, py, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        
+        ctx.globalAlpha = 1;
+
+        // Draw Nucleus (very small red dot in this model)
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        
+        // Gradient overlay to enhance "fading" effect at edges
+        const grad = ctx.createRadialGradient(cx, cy, 50, cx, cy, 250);
+        grad.addColorStop(0, 'rgba(255,255,255,0)');
+        grad.addColorStop(1, 'rgba(243, 244, 246, 0.8)'); // Match background
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,width,height);
+    }
+
+    function loop() {
+        time += 0.02 * speed;
+        
+        if (mode === 'planetary') {
+            drawPlanetary();
+        } else {
+            drawCloud();
+        }
+        
+        animationId = requestAnimationFrame(loop);
+    }
+
+    // --- INTERACTION ---
+
+    function setMode(newMode) {
+        mode = newMode;
+        
+        // Update UI Tabs
+        const btnPlanetary = document.getElementById('btn-planetary');
+        const btnCloud = document.getElementById('btn-cloud');
+        const cloudControls = document.getElementById('cloud-controls');
+        const knowledgeList = document.getElementById('knowledge-list');
+        const title = document.getElementById('info-title');
+        const desc = document.getElementById('info-desc');
+
+        if (mode === 'planetary') {
+            btnPlanetary.className = 'tab-btn tab-active flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2';
+            btnCloud.className = 'tab-btn tab-inactive flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2';
+            cloudControls.classList.add('hidden');
+        } else {
+            btnPlanetary.className = 'tab-btn tab-inactive flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2';
+            btnCloud.className = 'tab-btn tab-active flex-1 py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-2';
+            cloudControls.classList.remove('hidden');
+            if(cloudPoints.length === 0) generateCloud(); // Init if empty
+        }
+
+        // Update Text
+        title.innerText = modes[mode].title;
+        desc.innerText = modes[mode].desc;
+        
+        // Update List
+        knowledgeList.innerHTML = '';
+        modes[mode].facts.forEach(fact => {
+            const li = document.createElement('li');
+            li.textContent = fact;
+            knowledgeList.appendChild(li);
+        });
+    }
+
+    // Inputs
+    document.getElementById('speedRange').addEventListener('input', (e) => {
+        speed = parseFloat(e.target.value);
+        document.getElementById('speed-val').innerText = speed + 'x';
+    });
+
+    document.getElementById('densityRange').addEventListener('input', (e) => {
+        cloudDensity = parseInt(e.target.value);
+        generateCloud();
+    });
+
+    // Init
+    generateCloud(); // Pre-generate
+    setMode('planetary'); // Default
+    loop();
+
+</script>
+</body>
+</html>
